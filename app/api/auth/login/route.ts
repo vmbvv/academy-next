@@ -2,6 +2,11 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { loginSchema } from "@/lib/validation/auth";
 import { NextResponse } from "next/server";
+import {
+  generateSessionToken,
+  getSessionExpiresAt,
+  SESSION_COOKIE_NAME,
+} from "@/lib/auth/session";
 
 export async function POST(request: Request) {
   let body: unknown;
@@ -55,7 +60,18 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json(
+    const token = generateSessionToken();
+    const expiresAt = getSessionExpiresAt();
+
+    await prisma.session.create({
+      data: {
+        token,
+        userId: user.id,
+        expiresAt,
+      },
+    });
+
+    const response = NextResponse.json(
       {
         user: {
           id: user.id,
@@ -67,6 +83,16 @@ export async function POST(request: Request) {
       },
       { status: 200 },
     );
+
+    response.cookies.set(SESSION_COOKIE_NAME, token, {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      secure: process.env.NODE_ENV === "production",
+      expires: expiresAt,
+    });
+
+    return response;
   } catch (error) {
     console.error("[POST /api/auth/login]", error);
     return NextResponse.json(
