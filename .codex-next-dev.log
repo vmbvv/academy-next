@@ -1,0 +1,28 @@
+
+> academy-next@0.1.0 dev
+> next dev
+
+▲ Next.js 16.1.6 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.88.2:3000
+- Environments: .env
+
+✓ Starting...
+Creating turbopack project {
+  dir: 'C:\\Users\\User\\Documents\\erxes\\academy-next',
+  testMode: true
+}
+✓ Ready in 442ms
+ GET / 200 in 399ms (compile: 320ms, render: 79ms)
+ GET / 200 in 28ms (compile: 3ms, render: 25ms)
+⚠ Cross origin request detected from 127.0.0.1 to /_next/* resource. In a future major version of Next.js, you will need to explicitly configure "allowedDevOrigins" in next.config to allow this.
+Read more: https://nextjs.org/docs/app/api-reference/config/next-config-js/allowedDevOrigins
+ GET /api/auth/me 401 in 92ms (compile: 76ms, render: 16ms)
+ POST /api/auth/register 201 in 1665ms (compile: 48ms, render: 1617ms)
+ POST /api/auth/login 200 in 601ms (compile: 22ms, render: 578ms)
+ GET /api/auth/me 200 in 196ms (compile: 2ms, render: 194ms)
+ GET / 200 in 27ms (compile: 3ms, render: 24ms)
+ GET /api/auth/me 200 in 202ms (compile: 1840µs, render: 200ms)
+ GET / 200 in 22ms (compile: 3ms, render: 20ms)
+ GET / 200 in 23ms (compile: 2ms, render: 21ms)
+^C^C
