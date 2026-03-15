@@ -8,12 +8,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 
-export function AuthPlayground() {
-  // Global component state
-  const [statusMessage, setStatusMessage] = useState<string>("");
-  const [user, setUser] = useState(null);
+type User = {
+  id: string;
+  name: string;
+  email: string;
+};
 
-  // Form states
+export function AuthPlayground() {
+  const [statusMessage, setStatusMessage] = useState<string>("");
+  const [user, setUser] = useState<User | null>(null);
+
   const [registerForm, setRegisterForm] = useState({
     name: "",
     email: "",
@@ -32,7 +36,7 @@ export function AuthPlayground() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(registerForm),
-        credentials: "include", // Explicit cookie behavior
+        credentials: "include",
       });
 
       const data = await res.json();
@@ -65,7 +69,6 @@ export function AuthPlayground() {
 
       if (res.ok) {
         setStatusMessage("Login successful! Fetching session...");
-        // Immediately fetch the user profile upon successful login
         await handleCheckSession();
       } else {
         setStatusMessage(`Error: ${data.error || "Login failed"}`);
@@ -99,6 +102,27 @@ export function AuthPlayground() {
     }
   };
 
+  const handleLogout = async () => {
+    setStatusMessage("Logging out...");
+
+    try {
+      const res = await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+
+      if (res.ok) {
+        setUser(null);
+        setStatusMessage("Logged out successfully.");
+      } else {
+        const data = await res.json();
+        setStatusMessage(`Error: ${data.error || "Logout failed"}`);
+      }
+    } catch {
+      setStatusMessage("Error: Network issue during logout");
+    }
+  };
+
   const handleClearOutput = () => {
     setStatusMessage("");
     setUser(null);
@@ -110,7 +134,6 @@ export function AuthPlayground() {
     <div className="max-w-4xl mx-auto flex flex-col gap-8 p-6">
       <div className="text-center">
         <h1 className="text-2xl font-bold">Auth Playground</h1>
-        <p className="text-gray-500">Test your backend auth endpoints</p>
       </div>
 
       {/* --- REGISTER SECTION --- */}
@@ -121,6 +144,7 @@ export function AuthPlayground() {
             <Label htmlFor="reg-name">Name</Label>
             <Input
               id="reg-name"
+              autoComplete="name"
               value={registerForm.name}
               onChange={(e) =>
                 setRegisterForm({ ...registerForm, name: e.target.value })
@@ -133,6 +157,7 @@ export function AuthPlayground() {
             <Input
               id="reg-email"
               type="email"
+              autoComplete="email"
               value={registerForm.email}
               onChange={(e) =>
                 setRegisterForm({ ...registerForm, email: e.target.value })
@@ -145,6 +170,7 @@ export function AuthPlayground() {
             <Input
               id="reg-password"
               type="password"
+              autoComplete="new-password"
               value={registerForm.password}
               onChange={(e) =>
                 setRegisterForm({ ...registerForm, password: e.target.value })
@@ -167,6 +193,7 @@ export function AuthPlayground() {
             <Input
               id="login-email"
               type="email"
+              autoComplete="email"
               value={loginForm.email}
               onChange={(e) =>
                 setLoginForm({ ...loginForm, email: e.target.value })
@@ -179,6 +206,7 @@ export function AuthPlayground() {
             <Input
               id="login-password"
               type="password"
+              autoComplete="current-password"
               value={loginForm.password}
               onChange={(e) =>
                 setLoginForm({ ...loginForm, password: e.target.value })
@@ -200,6 +228,9 @@ export function AuthPlayground() {
         <div className="flex gap-4 mb-4">
           <Button onClick={handleCheckSession} variant="secondary">
             Check Session
+          </Button>
+          <Button onClick={handleLogout} variant="destructive">
+            Logout
           </Button>
           <Button onClick={handleClearOutput} variant="outline">
             Clear Output

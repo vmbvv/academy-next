@@ -5,9 +5,6 @@ export const createCommentSchema = z.object({
   movieId: z.string().refine(isMongoObjectId, {
     message: "movieId is not a valid ObjectId",
   }),
-  userId: z.string().refine(isMongoObjectId, {
-    message: "userId is not a valid ObjectId",
-  }),
   text: z
     .string()
     .trim()
@@ -16,11 +13,3 @@ export const createCommentSchema = z.object({
 });
 
 export type CreateCommentInput = z.infer<typeof createCommentSchema>;
-
-export const deleteCommentSchema = z.object({
-  userId: z.string().refine(isMongoObjectId, {
-    message: "userId is not a valid ObjectId",
-  }),
-});
-
-export type DeleteCommentInput = z.infer<typeof deleteCommentSchema>;

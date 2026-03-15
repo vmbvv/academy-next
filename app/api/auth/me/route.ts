@@ -1,40 +1,9 @@
-import { cookies } from "next/headers";
-import { SESSION_COOKIE_NAME } from "@/lib/auth/session";
-import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/auth/get-current-user";
 import { NextResponse } from "next/server";
 
 export async function GET() {
   try {
-    const cookieStore = await cookies();
-    const sessionToken = cookieStore.get(SESSION_COOKIE_NAME)?.value;
-
-    if (!sessionToken) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const session = await prisma.session.findUnique({
-      where: { token: sessionToken },
-      select: {
-        id: true,
-        userId: true,
-        expiresAt: true,
-      },
-    });
-
-    if (!session || session.expiresAt <= new Date()) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { id: session.userId },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        createdAt: true,
-      },
-    });
+    const user = await getCurrentUser();
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -44,7 +13,7 @@ export async function GET() {
   } catch (error) {
     console.error("[GET /api/auth/me]", error);
     return NextResponse.json(
-      { error: "Unexpected server error" },
+      { error: "Internal server error" },
       { status: 500 },
     );
   }

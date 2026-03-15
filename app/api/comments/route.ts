@@ -1,3 +1,4 @@
+import { getCurrentUser } from "@/lib/auth/get-current-user";
 import { prisma } from "@/lib/prisma";
 import { createCommentSchema } from "@/lib/validation/comment";
 import { NextResponse } from "next/server";
@@ -23,25 +24,28 @@ export async function POST(request: Request) {
     );
   }
 
-  const { movieId, userId, text } = result.data;
+  const { movieId, text } = result.data;
 
   try {
-    const [movie, user] = await Promise.all([
-      prisma.movie.findUnique({ where: { id: movieId } }),
-      prisma.user.findUnique({ where: { id: userId } }),
-    ]);
+    const currentUser = await getCurrentUser();
+
+    if (!currentUser) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const movie = await prisma.movie.findUnique({
+      where: { id: movieId },
+      select: { id: true },
+    });
 
     if (!movie) {
       return NextResponse.json({ error: "Movie not found" }, { status: 404 });
-    }
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
     const comment = await prisma.movieComment.create({
       data: {
         movieId,
-        userId,
+        userId: currentUser.id,
         text,
       },
       select: {

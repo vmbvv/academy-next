@@ -1,5 +1,5 @@
+import { getCurrentUser } from "@/lib/auth/get-current-user";
 import { prisma } from "@/lib/prisma";
-import { deleteCommentSchema } from "@/lib/validation/comment";
 import { NextResponse } from "next/server";
 import { isMongoObjectId } from "@/lib/object-id";
 
@@ -16,29 +16,15 @@ export async function DELETE(
     );
   }
 
-  let body: unknown;
+  void request;
 
   try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json(
-      { error: "Invalid or missing JSON body" },
-      { status: 400 },
-    );
-  }
+    const currentUser = await getCurrentUser();
 
-  const result = deleteCommentSchema.safeParse(body);
+    if (!currentUser) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  if (!result.success) {
-    return NextResponse.json(
-      { error: result.error.issues[0]?.message ?? "Invalid request body" },
-      { status: 400 },
-    );
-  }
-
-  const { userId } = result.data;
-
-  try {
     const comment = await prisma.movieComment.findUnique({
       where: { id },
       select: {
@@ -55,19 +41,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Comment not found" }, { status: 404 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        role: true,
-      },
-    });
-
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
-    if (comment.userId !== user.id && user.role !== "ADMIN") {
+    if (comment.userId !== currentUser.id && currentUser.role !== "ADMIN") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

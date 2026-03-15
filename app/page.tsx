@@ -1,5 +1,5 @@
-import { AuthPlayground } from "@/components/auth/AuthPlayground";
+import { MovieMain } from "@/components/movie/MovieMain";
 
 export default function Home() {
-  return <AuthPlayground />;
+  return <MovieMain />;
 }
