@@ -8,13 +8,13 @@ datasource db {
 }
 
 model Restaurant {
-  id           String              @id @default(auto()) @map("_id") @db.ObjectId
-  address      RestaurantAddress?
-  borough      String?
-  cuisine      String?
+  id           String             @id @default(auto()) @map("_id") @db.ObjectId
+  address      RestaurantAddress
+  borough      String
+  cuisine      String
   grades       RestaurantGrade[]
   name         String
-  restaurantId String?             @map("restaurant_id")
+  restaurantId String             @map("restaurant_id")
 
   @@index([name])
   @@index([borough, cuisine])
@@ -22,14 +22,14 @@ model Restaurant {
 }
 
 type RestaurantAddress {
-  building String?
+  building String
   coord    Float[]
-  street   String?
-  zipcode  String?
+  street   String
+  zipcode  String
 }
 
 type RestaurantGrade {
-  date  DateTime?
-  grade String?
+  date  DateTime
+  grade String
   score Int?
 }

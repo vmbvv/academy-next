@@ -1,5 +1,5 @@
-import { RestaurantMain } from "@/components/restaurant/RestaurantMain";
+import { redirect } from "next/navigation";
 
 export default function Home() {
-  return <RestaurantMain />;
+  redirect("/restaurants");
 }

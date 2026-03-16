@@ -1,9 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, MapPin } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { isMongoObjectId } from "@/lib/object-id";
 import { getRestaurantById } from "@/lib/restaurants/queries";
 
@@ -17,6 +15,10 @@ function formatDate(date: string | null) {
   }
 
   return new Date(date).toLocaleDateString();
+}
+
+function getInitial(name: string) {
+  return name.trim().charAt(0).toUpperCase() || "R";
 }
 
 export default async function RestaurantDetailPage({
@@ -34,72 +36,123 @@ export default async function RestaurantDetailPage({
     notFound();
   }
 
-  const latestGrade = restaurant.grades[0] ?? null;
-
   return (
-    <main className="min-h-screen px-6 py-10">
+    <main className="min-h-screen px-4 py-8 md:px-8 md:py-12">
       <div className="mx-auto max-w-4xl space-y-6">
-        <Button asChild variant="outline">
-          <Link href="/restaurants">
-            <ArrowLeft size={16} />
-            Back
-          </Link>
-        </Button>
+        <Link
+          href="/restaurants"
+          className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700"
+        >
+          <ArrowLeft size={16} />
+          Back to Restaurants
+        </Link>
 
-        <section className="space-y-2">
-          <h1 className="text-2xl font-semibold">{restaurant.name}</h1>
-          <p className="text-sm text-muted-foreground">{restaurant.cuisine}</p>
+        <section className="rounded-2xl border border-stone-200 bg-white p-6 md:p-8">
+          <div className="space-y-6">
+            <div className="flex flex-col gap-4 md:flex-row md:items-start">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-rose-100 font-serif text-2xl font-semibold text-rose-600">
+                {getInitial(restaurant.name)}
+              </div>
+
+              <div className="space-y-3">
+                <h1 className="font-serif text-4xl font-semibold tracking-tight text-slate-800">
+                  {restaurant.name}
+                </h1>
+
+                <div className="flex flex-wrap gap-3 text-sm">
+                  <span className="rounded-full bg-blue-50 px-4 py-2 text-blue-700">
+                    {restaurant.cuisine}
+                  </span>
+                  <span className="inline-flex items-center gap-2 rounded-full bg-stone-100 px-4 py-2 text-slate-600">
+                    <MapPin size={14} className="text-rose-500" />
+                    {restaurant.borough}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-stone-200 pt-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-400">
+                Address
+              </p>
+              <p className="mt-3 text-2xl text-slate-700">
+                {restaurant.addressText}
+              </p>
+            </div>
+
+            <div className="grid gap-3 border-t border-stone-200 pt-5 md:grid-cols-2">
+              <div className="rounded-xl bg-stone-50 px-4 py-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-400">
+                  Restaurant ID
+                </p>
+                <p className="mt-2 text-sm text-slate-600">
+                  {restaurant.restaurantId ?? "-"}
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-stone-50 px-4 py-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-400">
+                  Coordinates
+                </p>
+                <p className="mt-2 text-sm text-slate-600">
+                  {restaurant.coordinates
+                    ? `${restaurant.coordinates[1]}, ${restaurant.coordinates[0]}`
+                    : "-"}
+                </p>
+              </div>
+            </div>
+          </div>
         </section>
 
-        <section className="grid gap-3 md:grid-cols-2">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Borough</CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm">{restaurant.borough}</CardContent>
-          </Card>
+        <section className="rounded-2xl border border-stone-200 bg-white p-6 md:p-8">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="font-serif text-3xl font-semibold text-slate-800">
+                Grades
+              </h2>
+            </div>
+            <p className="text-sm text-slate-500">
+              {restaurant.grades.length} entries
+            </p>
+          </div>
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Address</CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm">{restaurant.addressText}</CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Restaurant ID</CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm">
-              {restaurant.restaurantId ?? "-"}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Latest grade</CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm">
-              {latestGrade
-                ? `${latestGrade.grade ?? "-"} / ${latestGrade.score ?? "-"} / ${formatDate(latestGrade.date)}`
-                : "-"}
-            </CardContent>
-          </Card>
-        </section>
-
-        <section className="space-y-3">
-          <h2 className="text-sm font-medium">Grades</h2>
           {restaurant.grades.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No grades.</p>
+            <p className="mt-6 rounded-xl bg-stone-50 px-4 py-5 text-sm text-slate-500">
+              No grades available.
+            </p>
           ) : (
-            <div className="space-y-2">
+            <div className="mt-6 space-y-3">
               {restaurant.grades.map((grade, index) => (
                 <div
                   key={`${grade.date ?? "grade"}-${index}`}
-                  className="rounded-lg border px-4 py-3 text-sm"
+                  className="grid gap-3 rounded-xl border border-stone-200 bg-stone-50 px-4 py-4 text-sm text-slate-600 md:grid-cols-[110px_110px_1fr]"
                 >
-                  {grade.grade ?? "-"} | {grade.score ?? "-"} |{" "}
-                  {formatDate(grade.date)}
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.16em] text-stone-400">
+                      Grade
+                    </p>
+                    <p className="mt-1 text-sm text-slate-700">
+                      {grade.grade ?? "-"}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.16em] text-stone-400">
+                      Score
+                    </p>
+                    <p className="mt-1 text-sm text-slate-700">
+                      {grade.score ?? "-"}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.16em] text-stone-400">
+                      Date
+                    </p>
+                    <p className="mt-1 text-sm text-slate-700">
+                      {formatDate(grade.date)}
+                    </p>
+                  </div>
                 </div>
               ))}
             </div>

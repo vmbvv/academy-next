@@ -6,113 +6,125 @@ import { prisma } from "@/lib/prisma";
 import {
   type RestaurantDetail,
   type RestaurantGradeSummary,
+  type RestaurantListFilters,
+  type RestaurantListResult,
   type RestaurantSummary,
 } from "@/lib/restaurants/types";
 
-type RawObjectId = {
-  $oid?: string;
-};
-
-type RawDate = {
-  $date?: string;
-};
-
-type RawAddress = {
-  building?: unknown;
-  coord?: unknown;
-  street?: unknown;
-  zipcode?: unknown;
-};
-
-type RawGrade = {
-  date?: RawDate | string | null;
-  grade?: unknown;
-  score?: unknown;
-};
-
-type RawRestaurant = {
-  _id?: RawObjectId;
-  name?: unknown;
-  cuisine?: unknown;
-  borough?: unknown;
-  restaurant_id?: unknown;
-  address?: RawAddress | null;
-  grades?: unknown;
-};
-
-type RawFacetResult = {
-  items?: RawRestaurant[];
-  totalCount?: Array<{ count?: number }>;
-};
+export const DEFAULT_RESTAURANT_PAGE_SIZE = 12;
 
 export type ListRestaurantsOptions = {
   page: number;
   pageSize: number;
+  search?: string;
+  cuisine?: string;
+  borough?: string;
 };
 
-const restaurantFields: Prisma.InputJsonObject = {
-  _id: 1,
-  name: 1,
-  cuisine: 1,
-  borough: 1,
-  address: 1,
-  restaurant_id: 1,
+type RestaurantAddressRecord = {
+  building: string;
+  coord: number[];
+  street: string;
+  zipcode: string;
 };
 
-function readString(value: unknown) {
-  if (typeof value !== "string") {
-    return null;
-  }
+type RestaurantGradeRecord = {
+  date: Date;
+  grade: string;
+  score: number | null;
+};
 
-  if (value.trim() === "") {
-    return null;
+type RestaurantSummaryRecord = {
+  id: string;
+  name: string;
+  cuisine: string;
+  borough: string;
+  restaurantId: string;
+  address: RestaurantAddressRecord;
+};
+
+type RestaurantDetailRecord = RestaurantSummaryRecord & {
+  grades: RestaurantGradeRecord[];
+};
+
+function readPageNumber(value: number, fallback: number) {
+  if (!Number.isInteger(value) || value < 1) {
+    return fallback;
   }
 
   return value;
 }
 
-function readStringOrFallback(value: unknown, fallback: string) {
-  const text = readString(value);
-  return text ?? fallback;
+function readText(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const trimmedValue = value.trim();
+
+  if (trimmedValue === "") {
+    return null;
+  }
+
+  return trimmedValue;
 }
 
-function readNumber(value: unknown) {
-  return typeof value === "number" ? value : null;
+function readTextOrFallback(value: string | null | undefined, fallback: string) {
+  return readText(value) ?? fallback;
 }
 
-function readDate(value: RawDate | string | null | undefined) {
-  if (typeof value === "string") {
-    return value;
-  }
-
-  if (value && typeof value === "object" && typeof value.$date === "string") {
-    return value.$date;
-  }
-
-  return null;
+function readFilterValue(value: string | null | undefined) {
+  return readText(value) ?? "";
 }
 
-function formatAddress(address?: RawAddress | null) {
-  if (!address) {
-    return "Address not available";
+function readFilters(options: ListRestaurantsOptions): RestaurantListFilters {
+  return {
+    search: readFilterValue(options.search),
+    cuisine: readFilterValue(options.cuisine),
+    borough: readFilterValue(options.borough),
+  };
+}
+
+function buildRestaurantWhere(
+  filters: RestaurantListFilters,
+): Prisma.RestaurantWhereInput {
+  const where: Prisma.RestaurantWhereInput = {
+    name: {
+      not: "",
+    },
+  };
+
+  if (filters.search) {
+    where.name = {
+      not: "",
+      contains: filters.search,
+      mode: "insensitive",
+    };
   }
 
-  const parts: string[] = [];
-  const building = readString(address.building);
-  const street = readString(address.street);
-  const zipcode = readString(address.zipcode);
-
-  if (building) {
-    parts.push(building);
+  if (filters.cuisine) {
+    where.cuisine = {
+      contains: filters.cuisine,
+      mode: "insensitive",
+    };
   }
 
-  if (street) {
-    parts.push(street);
+  if (filters.borough) {
+    where.borough = {
+      contains: filters.borough,
+      mode: "insensitive",
+    };
   }
 
-  if (zipcode) {
-    parts.push(zipcode);
-  }
+  return where;
+}
+
+function formatAddress(address: RestaurantAddressRecord) {
+  const parts = [
+    readText(address.building),
+    readText(address.street),
+    readText(address.zipcode),
+  ].filter(Boolean);
 
   if (parts.length === 0) {
     return "Address not available";
@@ -121,162 +133,133 @@ function formatAddress(address?: RawAddress | null) {
   return parts.join(", ");
 }
 
-function readCoordinates(value: unknown): [number, number] | null {
-  if (!Array.isArray(value) || value.length < 2) {
+function readCoordinates(address: RestaurantAddressRecord): [number, number] | null {
+  if (address.coord.length < 2) {
     return null;
   }
 
-  const first = value[0];
-  const second = value[1];
+  const longitude = address.coord[0];
+  const latitude = address.coord[1];
 
-  if (typeof first !== "number" || typeof second !== "number") {
+  if (typeof longitude !== "number" || typeof latitude !== "number") {
     return null;
   }
 
-  return [first, second];
+  return [longitude, latitude];
 }
 
-function readGrades(value: unknown): RestaurantGradeSummary[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
+function mapGrades(grades: RestaurantGradeRecord[]): RestaurantGradeSummary[] {
+  const sortedGrades = [...grades];
 
-  const grades: RestaurantGradeSummary[] = [];
+  sortedGrades.sort((firstGrade, secondGrade) => {
+    const firstTime = firstGrade.date ? firstGrade.date.getTime() : 0;
+    const secondTime = secondGrade.date ? secondGrade.date.getTime() : 0;
 
-  for (const item of value) {
-    if (!item || typeof item !== "object") {
-      continue;
-    }
-
-    const grade = item as RawGrade;
-
-    grades.push({
-      grade: readString(grade.grade),
-      score: readNumber(grade.score),
-      date: readDate(grade.date),
-    });
-  }
-
-  grades.sort((a, b) => {
-    const firstTime = a.date ? new Date(a.date).getTime() : 0;
-    const secondTime = b.date ? new Date(b.date).getTime() : 0;
     return secondTime - firstTime;
   });
 
-  return grades;
+  return sortedGrades.map((grade) => {
+    return {
+      grade: readText(grade.grade),
+      score: grade.score ?? null,
+      date: grade.date ? grade.date.toISOString() : null,
+    };
+  });
 }
 
-function makeRestaurantSummary(rawRestaurant: RawRestaurant): RestaurantSummary {
+function mapRestaurantSummary(
+  restaurant: RestaurantSummaryRecord,
+): RestaurantSummary {
   return {
-    id: rawRestaurant._id?.$oid ?? "",
-    name: readStringOrFallback(rawRestaurant.name, "Untitled restaurant"),
-    cuisine: readStringOrFallback(rawRestaurant.cuisine, "Unknown cuisine"),
-    borough: readStringOrFallback(rawRestaurant.borough, "Unknown borough"),
-    addressText: formatAddress(rawRestaurant.address),
-    restaurantId: readString(rawRestaurant.restaurant_id),
+    id: restaurant.id,
+    name: readTextOrFallback(restaurant.name, "Untitled restaurant"),
+    cuisine: readTextOrFallback(restaurant.cuisine, "Unknown cuisine"),
+    borough: readTextOrFallback(restaurant.borough, "Unknown borough"),
+    addressText: formatAddress(restaurant.address),
+    restaurantId: readText(restaurant.restaurantId),
   };
 }
 
-function makeRestaurantDetail(rawRestaurant: RawRestaurant): RestaurantDetail {
-  const summary = makeRestaurantSummary(rawRestaurant);
-
+function mapRestaurantDetail(restaurant: RestaurantDetailRecord): RestaurantDetail {
   return {
-    ...summary,
-    coordinates: readCoordinates(rawRestaurant.address?.coord),
-    grades: readGrades(rawRestaurant.grades),
+    ...mapRestaurantSummary(restaurant),
+    coordinates: readCoordinates(restaurant.address),
+    grades: mapGrades(restaurant.grades),
   };
 }
 
-function readFacetResult(rawValue: unknown) {
-  if (!Array.isArray(rawValue)) {
-    return { items: [], totalItems: 0 };
-  }
+export async function listRestaurants(
+  options: ListRestaurantsOptions,
+): Promise<RestaurantListResult> {
+  const pageSize = readPageNumber(
+    options.pageSize,
+    DEFAULT_RESTAURANT_PAGE_SIZE,
+  );
+  const requestedPage = readPageNumber(options.page, 1);
+  const filters = readFilters(options);
+  const where = buildRestaurantWhere(filters);
 
-  const firstItem = rawValue[0];
+  // console.log(requestedPage);
+  // console.log(pageSize);
+  // console.log(filters);
 
-  if (!firstItem || typeof firstItem !== "object") {
-    return { items: [], totalItems: 0 };
-  }
-
-  const facet = firstItem as RawFacetResult;
-  const items = Array.isArray(facet.items) ? facet.items : [];
-
-  let totalItems = 0;
-  if (
-    Array.isArray(facet.totalCount) &&
-    facet.totalCount[0] &&
-    typeof facet.totalCount[0].count === "number"
-  ) {
-    totalItems = facet.totalCount[0].count;
-  }
-
-  return { items, totalItems };
-}
-
-function buildListPipeline(options: ListRestaurantsOptions) {
-  const pipeline: Prisma.InputJsonObject[] = [];
-
-  pipeline.push({
-    $match: {
-      name: { $nin: [null, ""] },
-    } as Prisma.InputJsonObject,
+  const totalItems = await prisma.restaurant.count({
+    where,
   });
 
-  pipeline.push({
-    $facet: {
-      items: [
-        { $sort: { name: 1, _id: 1 } },
-        { $skip: (options.page - 1) * options.pageSize },
-        { $limit: options.pageSize },
-        { $project: restaurantFields },
-      ],
-      totalCount: [{ $count: "count" }],
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const page = Math.min(requestedPage, totalPages);
+
+  const restaurantsFromDb = await prisma.restaurant.findMany({
+    where,
+    orderBy: [{ name: "asc" }, { id: "asc" }],
+    skip: (page - 1) * pageSize,
+    take: pageSize,
+    select: {
+      id: true,
+      name: true,
+      cuisine: true,
+      borough: true,
+      restaurantId: true,
+      address: true,
     },
   });
 
-  return pipeline;
-}
-
-export async function listRestaurants(options: ListRestaurantsOptions) {
-  const rawList = await prisma.restaurant.aggregateRaw({
-    pipeline: buildListPipeline(options),
-  });
-
-  const { items, totalItems } = readFacetResult(rawList);
-  const restaurants: RestaurantSummary[] = [];
-
-  for (const item of items) {
-    const restaurant = makeRestaurantSummary(item);
-
-    if (restaurant.id) {
-      restaurants.push(restaurant);
-    }
-  }
+  // console.log(restaurantsFromDb[0]);
 
   return {
-    restaurants,
+    restaurants: restaurantsFromDb.map(mapRestaurantSummary),
+    page,
+    pageSize,
     totalItems,
+    totalPages,
+    filters,
   };
 }
 
 export async function getRestaurantById(id: string) {
-  const rawResult = await prisma.restaurant.aggregateRaw({
-    pipeline: [
-      { $match: { _id: { $oid: id } } },
-      { $limit: 1 },
-      { $project: { ...restaurantFields, grades: 1 } },
-    ],
+  // console.log(id);
+
+  const restaurantFromDb = await prisma.restaurant.findUnique({
+    where: {
+      id,
+    },
+    select: {
+      id: true,
+      name: true,
+      cuisine: true,
+      borough: true,
+      restaurantId: true,
+      address: true,
+      grades: true,
+    },
   });
 
-  if (!Array.isArray(rawResult)) {
+  // console.log(restaurantFromDb);
+
+  if (!restaurantFromDb) {
     return null;
   }
 
-  const firstItem = rawResult[0];
-
-  if (!firstItem || typeof firstItem !== "object") {
-    return null;
-  }
-
-  return makeRestaurantDetail(firstItem as RawRestaurant);
+  return mapRestaurantDetail(restaurantFromDb);
 }
