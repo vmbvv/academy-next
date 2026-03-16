@@ -27,6 +27,11 @@ export async function POST(request: Request) {
   const { name, email, password } = result.data;
 
   try {
+    const adminUser = await prisma.user.findFirst({
+      where: { role: "ADMIN" },
+      select: { id: true },
+    });
+
     const existingUser = await prisma.user.findUnique({
       where: { email },
     });
@@ -45,7 +50,7 @@ export async function POST(request: Request) {
         name,
         email,
         passwordHash,
-        role: "USER",
+        role: adminUser ? "USER" : "ADMIN",
       },
       select: {
         id: true,

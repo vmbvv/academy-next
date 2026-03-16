@@ -17,6 +17,7 @@ export type MovieSummary = {
   year: number | null;
   poster: string | null;
   released: string | null;
+  genres?: string[];
 };
 
 type MovieBrowserSectionProps = {

@@ -4,8 +4,10 @@ import { Calendar, Clock3 } from "lucide-react";
 
 import { prisma } from "@/lib/prisma";
 import { isMongoObjectId } from "@/lib/object-id";
+import { MovieRatingPanel } from "@/components/movie/MovieRatingPanel";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { MovieComments } from "@/components/movie/MovieComments";
 
 type MoviePageProps = {
   params: Promise<{ id: string }>;
@@ -142,8 +144,10 @@ export default async function MovieDetailPage({ params }: MoviePageProps) {
             <Button asChild variant="outline">
               <Link href="/">Back to movies</Link>
             </Button>
-            <Button disabled>Comments soon</Button>
           </div>
+
+          <MovieRatingPanel movieId={movie.id} />
+          <MovieComments movieId={movie.id} />
         </div>
       </div>
     </main>

@@ -13,3 +13,9 @@ export const createCommentSchema = z.object({
 });
 
 export type CreateCommentInput = z.infer<typeof createCommentSchema>;
+
+export const commentReactionSchema = z.object({
+  type: z.enum(["LIKE", "DISLIKE"]),
+});
+
+export type CommentReactionInput = z.infer<typeof commentReactionSchema>;
