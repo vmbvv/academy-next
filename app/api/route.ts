@@ -4,7 +4,7 @@ export async function GET() {
   return NextResponse.json(
     {
       ok: true,
-      service: "erxes-academy-api",
+      service: "restaurant-explorer-api",
     },
     { status: 200 },
   );

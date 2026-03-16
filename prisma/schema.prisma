@@ -7,140 +7,29 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role {
-  USER
-  ADMIN
+model Restaurant {
+  id           String              @id @default(auto()) @map("_id") @db.ObjectId
+  address      RestaurantAddress?
+  borough      String?
+  cuisine      String?
+  grades       RestaurantGrade[]
+  name         String
+  restaurantId String?             @map("restaurant_id")
+
+  @@index([name])
+  @@index([borough, cuisine])
+  @@map("restaurants")
 }
 
-enum ReactionType {
-  LIKE
-  DISLIKE
+type RestaurantAddress {
+  building String?
+  coord    Float[]
+  street   String?
+  zipcode  String?
 }
 
-model User {
-  id               String            @id @default(auto()) @map("_id") @db.ObjectId
-  name             String
-  email            String            @unique
-  passwordHash     String
-  role             Role              @default(USER)
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  comments         MovieComment[]
-  ratings          MovieRating[]
-  commentReactions CommentReaction[]
-  sessions         Session[]
-
-  @@map("users")
-}
-
-model Movie {
-  id         String         @id @default(auto()) @map("_id") @db.ObjectId
-  title      String
-  year       Int?
-  plot       String?
-  fullplot   String?
-  genres     String[]       @default([])
-  runtime    Int?
-  cast       String[]       @default([])
-  poster     String?
-  released   DateTime?
-  languages  String[]       @default([])
-  directors  String[]       @default([])
-  awards     Awards?
-  imdb       ImdbInfo?
-  tomatoes   Tomatoes?
-  comments   MovieComment[]
-  ratings    MovieRating[]
-
-  @@index([title])
-  @@index([year, released(sort: Desc)])
-  @@index([released(sort: Desc)])
-  @@map("movies")
-}
-
-model MovieComment {
-  id        String            @id @default(auto()) @map("_id") @db.ObjectId
-  movieId   String            @db.ObjectId
-  userId    String            @db.ObjectId
-  text      String?
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @updatedAt
-  deletedAt DateTime?
-  movie     Movie             @relation(fields: [movieId], references: [id], onDelete: Cascade)
-  user      User              @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  reactions CommentReaction[]
-
-  @@index([movieId, createdAt(sort: Desc)])
-  @@index([userId, createdAt(sort: Desc)])
-  @@map("movie_comments")
-}
-
-model MovieRating {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  movieId   String   @db.ObjectId
-  userId    String   @db.ObjectId
-  value     Int
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  movie     Movie    @relation(fields: [movieId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-
-  @@unique([movieId, userId])
-  @@index([userId, createdAt(sort: Desc)])
-  @@map("movie_ratings")
-}
-
-model CommentReaction {
-  id        String       @id @default(auto()) @map("_id") @db.ObjectId
-  commentId String       @db.ObjectId
-  userId    String       @db.ObjectId
-  type      ReactionType
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
-  comment   MovieComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
-  user      User         @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-
-  @@unique([commentId, userId])
-  @@index([userId, createdAt(sort: Desc)])
-  @@map("comment_reactions")
-}
-
-type Awards {
-  wins        Int?
-  nominations Int?
-  text        String?
-}
-
-type ImdbInfo {
-  rating Float?
-  votes  Int?
-  id     Int?
-}
-
-type RatingInfo {
-  rating     Float?
-  numReviews Int?
-  meter      Int?
-}
-
-type Tomatoes {
-  viewer      RatingInfo?
-  fresh       Int?
-  critic      RatingInfo?
-  rotten      Int?
-  lastUpdated DateTime?
-}
-
-model Session {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  token     String   @unique
-  userId    String   @db.ObjectId
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([expiresAt])
-  @@map("sessions")
+type RestaurantGrade {
+  date  DateTime?
+  grade String?
+  score Int?
 }
