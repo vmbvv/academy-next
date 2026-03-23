@@ -3,18 +3,23 @@
 import {
   createContext,
   useContext,
-  useEffect,
-  useState,
   type ReactNode,
 } from "react";
+import {
+  getSession,
+  signIn,
+  signOut,
+  useSession,
+} from "next-auth/react";
 
 type AuthUser = {
   id: string;
   name: string;
   email: string;
   role: "USER" | "ADMIN";
-  createdAt: string;
 };
+
+type SocialProvider = "google" | "github";
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -23,6 +28,7 @@ type AuthContextValue = {
   refreshUser: () => Promise<AuthUser | null>;
   register: (name: string, email: string, password: string) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
+  loginWithProvider: (provider: SocialProvider) => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -47,68 +53,43 @@ async function getErrorMessage(response: Response) {
   return "Request failed";
 }
 
-async function fetchCurrentUser() {
-  const response = await fetch("/api/auth/me", {
-    method: "GET",
-    credentials: "include",
-  });
-
-  if (response.status === 401) {
+function mapSessionUser(
+  user:
+    | {
+        id?: string;
+        name?: string | null;
+        email?: string | null;
+        role?: "USER" | "ADMIN";
+      }
+    | null
+    | undefined,
+) {
+  if (!user?.id) {
     return null;
   }
 
-  if (!response.ok) {
-    throw new Error(await getErrorMessage(response));
-  }
-
-  const data: { user: AuthUser } = await response.json();
-  return data.user;
+  return {
+    id: user.id,
+    name: user.name ?? user.email ?? "User",
+    email: user.email ?? "",
+    role: user.role === "ADMIN" ? "ADMIN" : "USER",
+  } satisfies AuthUser;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    async function bootstrapAuth() {
-      try {
-        const nextUser = await fetchCurrentUser();
-
-        if (isMounted) {
-          setUser(nextUser);
-        }
-      } catch (error) {
-        console.error("[AuthProvider bootstrap]", error);
-
-        if (isMounted) {
-          setUser(null);
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
-    }
-
-    void bootstrapAuth();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  const { data: session, status, update } = useSession();
+  const user = mapSessionUser(session?.user);
 
   const refreshUser = async () => {
-    setIsLoading(true);
+    const nextSession = await getSession();
 
-    try {
-      const nextUser = await fetchCurrentUser();
-      setUser(nextUser);
-      return nextUser;
-    } finally {
-      setIsLoading(false);
+    if (!nextSession) {
+      await update();
+      return null;
     }
+
+    await update();
+    return mapSessionUser(nextSession.user);
   };
 
   const register = async (name: string, email: string, password: string) => {
@@ -125,31 +106,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const login = async (email: string, password: string) => {
-    const response = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ email, password }),
+    const result = await signIn("credentials", {
+      email,
+      password,
+      redirect: false,
     });
 
-    if (!response.ok) {
-      throw new Error(await getErrorMessage(response));
+    if (result?.error) {
+      throw new Error("Invalid email or password");
     }
 
-    await refreshUser();
+    await update();
+  };
+
+  const loginWithProvider = async (provider: SocialProvider) => {
+    await signIn(provider, { redirectTo: "/" });
   };
 
   const logout = async () => {
-    const response = await fetch("/api/auth/logout", {
-      method: "POST",
-      credentials: "include",
-    });
-
-    if (!response.ok) {
-      throw new Error(await getErrorMessage(response));
-    }
-
-    setUser(null);
+    await signOut({ redirect: false });
+    await update();
   };
 
   return (
@@ -157,10 +133,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         isAuthenticated: user !== null,
-        isLoading,
+        isLoading: status === "loading",
         refreshUser,
         register,
         login,
+        loginWithProvider,
         logout,
       }}
     >

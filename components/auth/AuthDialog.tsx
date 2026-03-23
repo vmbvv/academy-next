@@ -16,7 +16,7 @@ type AuthDialogProps = {
 type Mode = "login" | "signup";
 
 export function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
-  const { login, register } = useAuth();
+  const { login, loginWithProvider, register } = useAuth();
 
   const [mode, setMode] = useState<Mode>("login");
   const [name, setName] = useState("");
@@ -72,6 +72,23 @@ export function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
     }
   };
 
+  const handleSocialLogin = async (provider: "google" | "github") => {
+    setError("");
+    setNotice("");
+    setPending(true);
+
+    try {
+      await loginWithProvider(provider);
+    } catch (submitError) {
+      setError(
+        submitError instanceof Error
+          ? submitError.message
+          : "Authentication failed.",
+      );
+      setPending(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
       <Card className="w-full max-w-md border-slate-800 bg-slate-900 p-6 text-slate-100 shadow-2xl">
@@ -111,6 +128,27 @@ export function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
             Sign up
           </Button>
         </div>
+
+        <div className="mt-6 grid gap-3 sm:grid-cols-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void handleSocialLogin("google")}
+            disabled={pending}
+          >
+            Continue with Google
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void handleSocialLogin("github")}
+            disabled={pending}
+          >
+            Continue with GitHub
+          </Button>
+        </div>
+
+        <div className="mt-6 h-px bg-slate-800" />
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           {mode === "signup" ? (
