@@ -1,5 +1,30 @@
+import {
+  getCacheValue,
+  getCacheVersion,
+  hashCacheKey,
+  setCacheValue,
+} from "@/lib/cache";
 import { listMovies } from "@/lib/movies/list-movies";
 import { NextResponse } from "next/server";
+
+const MOVIE_LIST_CACHE_NAMESPACE = "movies:list";
+const MOVIE_LIST_CACHE_TTL_SECONDS = 60;
+
+type MoviesResponse = {
+  movies: Awaited<ReturnType<typeof listMovies>>["movies"];
+  pagination: {
+    page: number;
+    pageSize: number;
+    totalMovies: number;
+    totalPages: number;
+  };
+  filters: {
+    search: string;
+    sort: "latest" | "title" | "year";
+    genre: string;
+    genres: string[];
+  };
+};
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -14,6 +39,22 @@ export async function GET(request: Request) {
       : "latest";
 
   try {
+    const cacheVersion = await getCacheVersion(MOVIE_LIST_CACHE_NAMESPACE);
+    const cacheKey = `movies:list:v${cacheVersion}:${hashCacheKey(
+      JSON.stringify({
+        genre,
+        page,
+        pageSize,
+        search,
+        sort,
+      }),
+    )}`;
+    const cachedPayload = await getCacheValue<MoviesResponse>(cacheKey);
+
+    if (cachedPayload) {
+      return NextResponse.json(cachedPayload, { status: 200 });
+    }
+
     const { movies, totalItems, genres } = await listMovies({
       search,
       genre,
@@ -25,25 +66,25 @@ export async function GET(request: Request) {
     });
 
     const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
-
-    return NextResponse.json(
-      {
-        movies,
-        pagination: {
-          page,
-          pageSize,
-          totalMovies: totalItems,
-          totalPages,
-        },
-        filters: {
-          search,
-          sort,
-          genre,
-          genres,
-        },
+    const payload: MoviesResponse = {
+      movies,
+      pagination: {
+        page,
+        pageSize,
+        totalMovies: totalItems,
+        totalPages,
       },
-      { status: 200 },
-    );
+      filters: {
+        search,
+        sort,
+        genre,
+        genres,
+      },
+    };
+
+    await setCacheValue(cacheKey, payload, MOVIE_LIST_CACHE_TTL_SECONDS);
+
+    return NextResponse.json(payload, { status: 200 });
   } catch (error) {
     console.error("[GET /api/movies]", error);
     return NextResponse.json(

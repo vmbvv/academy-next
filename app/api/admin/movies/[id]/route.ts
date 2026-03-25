@@ -1,5 +1,7 @@
+import { bumpCacheVersion } from "@/lib/cache";
 import { getCurrentUser } from "@/lib/auth/get-current-user";
 import { isMongoObjectId } from "@/lib/object-id";
+import { invalidateMovieDetailCache } from "@/lib/movies/get-movie-detail";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
@@ -40,6 +42,11 @@ export async function DELETE(
     await prisma.movie.delete({
       where: { id },
     });
+
+    await Promise.all([
+      invalidateMovieDetailCache(id),
+      bumpCacheVersion("movies:list"),
+    ]);
 
     return NextResponse.json({ movie }, { status: 200 });
   } catch (error) {

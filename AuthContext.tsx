@@ -113,6 +113,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     if (result?.error) {
+      if (result.code === "rate_limited") {
+        throw new Error(
+          "Too many login attempts. Please wait a few minutes and try again.",
+        );
+      }
+
       throw new Error("Invalid email or password");
     }
 

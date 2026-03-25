@@ -2,8 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Calendar, Clock3 } from "lucide-react";
 
-import { prisma } from "@/lib/prisma";
 import { isMongoObjectId } from "@/lib/object-id";
+import { getMovieDetail } from "@/lib/movies/get-movie-detail";
 import { MovieRatingPanel } from "@/components/movie/MovieRatingPanel";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -20,23 +20,7 @@ export default async function MovieDetailPage({ params }: MoviePageProps) {
     notFound();
   }
 
-  const movie = await prisma.movie.findUnique({
-    where: { id },
-    select: {
-      id: true,
-      title: true,
-      year: true,
-      plot: true,
-      fullplot: true,
-      runtime: true,
-      poster: true,
-      released: true,
-      languages: true,
-      directors: true,
-      genres: true,
-      imdb: true,
-    },
-  });
+  const movie = await getMovieDetail(id);
 
   if (!movie) {
     notFound();

@@ -1,16 +1,64 @@
 import { getCurrentUser } from "@/lib/auth/get-current-user";
+import { deleteCacheValue, getCacheValue, setCacheValue } from "@/lib/cache";
 import { isMongoObjectId } from "@/lib/object-id";
 import { prisma } from "@/lib/prisma";
+import { getClientIp, normalizeIdentifierPart } from "@/lib/request";
+import {
+  drainRateLimit,
+  getRetryAfterSeconds,
+  rateLimit,
+} from "@/lib/rate-limit";
 import { movieRatingSchema } from "@/lib/validation/movie";
 import { NextResponse } from "next/server";
 
+const MOVIE_RATING_CACHE_TTL_SECONDS = 60;
+
+type SharedRatingAggregate = {
+  averageRating: number | null;
+  ratingsCount: number;
+};
+
+function getMovieRatingAggregateCacheKey(movieId: string) {
+  return `movie:rating:aggregate:${movieId}`;
+}
+
+async function getSharedRatingAggregate(movieId: string) {
+  const cacheKey = getMovieRatingAggregateCacheKey(movieId);
+  const cachedAggregate = await getCacheValue<SharedRatingAggregate>(cacheKey);
+
+  if (cachedAggregate) {
+    return cachedAggregate;
+  }
+
+  const aggregate = await prisma.movieRating.aggregate({
+    where: { movieId },
+    _avg: { value: true },
+    _count: { _all: true },
+  });
+  const sharedAggregate = {
+    averageRating:
+      typeof aggregate._avg.value === "number"
+        ? Number(aggregate._avg.value.toFixed(1))
+        : null,
+    ratingsCount: aggregate._count._all,
+  };
+
+  await setCacheValue(
+    cacheKey,
+    sharedAggregate,
+    MOVIE_RATING_CACHE_TTL_SECONDS,
+  );
+
+  return sharedAggregate;
+}
+
+async function invalidateSharedRatingAggregate(movieId: string) {
+  await deleteCacheValue(getMovieRatingAggregateCacheKey(movieId));
+}
+
 async function getRatingSummary(movieId: string, userId?: string) {
-  const [aggregate, currentUserRating] = await Promise.all([
-    prisma.movieRating.aggregate({
-      where: { movieId },
-      _avg: { value: true },
-      _count: { _all: true },
-    }),
+  const [sharedAggregate, currentUserRating] = await Promise.all([
+    getSharedRatingAggregate(movieId),
     userId
       ? prisma.movieRating.findFirst({
           where: { movieId, userId },
@@ -20,11 +68,8 @@ async function getRatingSummary(movieId: string, userId?: string) {
   ]);
 
   return {
-    averageRating:
-      typeof aggregate._avg.value === "number"
-        ? Number(aggregate._avg.value.toFixed(1))
-        : null,
-    ratingsCount: aggregate._count._all,
+    averageRating: sharedAggregate.averageRating,
+    ratingsCount: sharedAggregate.ratingsCount,
     userRating: currentUserRating?.value ?? null,
   };
 }
@@ -111,6 +156,25 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const rateLimitResult = await rateLimit(
+      "ratingWrite",
+      `${normalizeIdentifierPart(currentUser.id)}:${normalizeIdentifierPart(getClientIp(request))}`,
+    );
+
+    drainRateLimit(rateLimitResult);
+
+    if (!rateLimitResult.success) {
+      return NextResponse.json(
+        { error: "Too many rating requests. Please wait a minute and try again." },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(getRetryAfterSeconds(rateLimitResult.reset)),
+          },
+        },
+      );
+    }
+
     const movie = await ensureMovieExists(id);
 
     if (!movie) {
@@ -141,6 +205,8 @@ export async function POST(
         },
       });
     }
+
+    await invalidateSharedRatingAggregate(id);
 
     const ratingSummary = await getRatingSummary(id, currentUser.id);
 
@@ -176,6 +242,25 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const rateLimitResult = await rateLimit(
+      "ratingWrite",
+      `${normalizeIdentifierPart(currentUser.id)}:${normalizeIdentifierPart(getClientIp(request))}`,
+    );
+
+    drainRateLimit(rateLimitResult);
+
+    if (!rateLimitResult.success) {
+      return NextResponse.json(
+        { error: "Too many rating requests. Please wait a minute and try again." },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(getRetryAfterSeconds(rateLimitResult.reset)),
+          },
+        },
+      );
+    }
+
     const movie = await ensureMovieExists(id);
 
     if (!movie) {
@@ -188,6 +273,8 @@ export async function DELETE(
         userId: currentUser.id,
       },
     });
+
+    await invalidateSharedRatingAggregate(id);
 
     const ratingSummary = await getRatingSummary(id, currentUser.id);
 

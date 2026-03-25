@@ -1,3 +1,4 @@
+import { bumpCacheVersion } from "@/lib/cache";
 import { getCurrentUser } from "@/lib/auth/get-current-user";
 import { listMovies } from "@/lib/movies/list-movies";
 import { prisma } from "@/lib/prisma";
@@ -113,6 +114,8 @@ export async function POST(request: Request) {
         released: true,
       },
     });
+
+    await bumpCacheVersion("movies:list");
 
     return NextResponse.json({ movie }, { status: 201 });
   } catch (error) {

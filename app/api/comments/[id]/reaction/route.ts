@@ -1,6 +1,12 @@
 import { getCurrentUser } from "@/lib/auth/get-current-user";
 import { isMongoObjectId } from "@/lib/object-id";
 import { prisma } from "@/lib/prisma";
+import { getClientIp, normalizeIdentifierPart } from "@/lib/request";
+import {
+  drainRateLimit,
+  getRetryAfterSeconds,
+  rateLimit,
+} from "@/lib/rate-limit";
 import { commentReactionSchema } from "@/lib/validation/comment";
 import { NextResponse } from "next/server";
 
@@ -65,6 +71,25 @@ export async function POST(
 
     if (!currentUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const rateLimitResult = await rateLimit(
+      "commentReaction",
+      `${normalizeIdentifierPart(currentUser.id)}:${normalizeIdentifierPart(getClientIp(request))}`,
+    );
+
+    drainRateLimit(rateLimitResult);
+
+    if (!rateLimitResult.success) {
+      return NextResponse.json(
+        { error: "Too many reactions in a short time. Please slow down." },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(getRetryAfterSeconds(rateLimitResult.reset)),
+          },
+        },
+      );
     }
 
     const comment = await prisma.movieComment.findUnique({

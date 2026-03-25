@@ -1,5 +1,11 @@
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import { getClientIp, normalizeIdentifierPart } from "@/lib/request";
+import {
+  drainRateLimit,
+  getRetryAfterSeconds,
+  rateLimit,
+} from "@/lib/rate-limit";
 import { registerSchema } from "@/lib/validation/auth";
 import { NextResponse } from "next/server";
 
@@ -27,6 +33,25 @@ export async function POST(request: Request) {
   const { name, email, password } = result.data;
 
   try {
+    const rateLimitResult = await rateLimit(
+      "register",
+      normalizeIdentifierPart(getClientIp(request)),
+    );
+
+    drainRateLimit(rateLimitResult);
+
+    if (!rateLimitResult.success) {
+      return NextResponse.json(
+        { error: "Too many sign-up attempts. Please try again later." },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(getRetryAfterSeconds(rateLimitResult.reset)),
+          },
+        },
+      );
+    }
+
     const adminUser = await prisma.user.findFirst({
       where: { role: "ADMIN" },
       select: { id: true },

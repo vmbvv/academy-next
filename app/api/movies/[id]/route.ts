@@ -1,5 +1,5 @@
-import { prisma } from "@/lib/prisma";
 import { isMongoObjectId } from "@/lib/object-id";
+import { getMovieDetail } from "@/lib/movies/get-movie-detail";
 import { NextResponse } from "next/server";
 
 export async function GET(
@@ -17,24 +17,7 @@ export async function GET(
   }
 
   try {
-    const movie = await prisma.movie.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        title: true,
-        year: true,
-        plot: true,
-        fullplot: true,
-        genres: true,
-        runtime: true,
-        poster: true,
-        released: true,
-        languages: true,
-        directors: true,
-        imdb: true,
-        tomatoes: true,
-      },
-    });
+    const movie = await getMovieDetail(id);
 
     if (!movie) {
       return NextResponse.json({ error: "Movie not found" }, { status: 404 });

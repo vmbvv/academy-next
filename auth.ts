@@ -1,13 +1,22 @@
 import bcrypt from "bcryptjs";
 import type { Role } from "@prisma/client";
-import NextAuth from "next-auth";
+import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import GitHub from "next-auth/providers/github";
 import Google from "next-auth/providers/google";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 
 import { prisma } from "@/lib/prisma";
+import { getClientIp, normalizeIdentifierPart } from "@/lib/request";
+import {
+  drainRateLimit,
+  rateLimit,
+} from "@/lib/rate-limit";
 import { loginSchema } from "@/lib/validation/auth";
+
+class RateLimitedCredentialsSignin extends CredentialsSignin {
+  code = "rate_limited";
+}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
@@ -20,7 +29,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
         const result = loginSchema.safeParse(credentials);
 
         if (!result.success) {
@@ -28,6 +37,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
 
         const { email, password } = result.data;
+        const rateLimitResult = await rateLimit(
+          "login",
+          `${normalizeIdentifierPart(getClientIp(request))}:${normalizeIdentifierPart(email)}`,
+        );
+
+        drainRateLimit(rateLimitResult);
+
+        if (!rateLimitResult.success) {
+          throw new RateLimitedCredentialsSignin();
+        }
 
         const user = await prisma.user.findUnique({
           where: { email },
